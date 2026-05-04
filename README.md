@@ -46,8 +46,14 @@ With your virtual environment activated, install the required libraries (PyTorch
 pip install -r requirements.txt
 ```
 
-### Step 4: Run the Application!
-Once everything is installed, launch the interactive web dashboard:
+### Step 4: Setup the Data Directory
+Because network flow datasets are massive, they are not included in this GitHub repository. 
+1. Create a folder named `data/` in the root of the project.
+2. Download a network flow dataset (such as the CIC-IDS2017 `Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv`).
+3. Place the `.csv` file inside the `data/` folder.
+
+### Step 5: Run the Application!
+Once the data is in place, launch the interactive web dashboard:
 ```bash
 streamlit run streamlit_app.py
 ```
