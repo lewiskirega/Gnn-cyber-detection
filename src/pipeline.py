@@ -147,7 +147,8 @@ def run_experiment(
         )
         pyg_data = graph_bundle.data
         graph_mode_used = "hosts"
-        info = f"Host graph: {int(pyg_data.num_nodes)} nodes, {pyg_data.edge_index.size(1)} directed edge entries."
+        num_edges = pyg_data.edge_index.size(1) if pyg_data.edge_index is not None else 0
+        info = f"Host graph: {int(pyg_data.num_nodes or 0)} nodes, {num_edges} directed edge entries."
     else:
         label_name = config.label_column or "Label"
         loader = TrafficDataLoader(DataLoaderConfig(label_column=label_name))
@@ -165,7 +166,7 @@ def run_experiment(
         )
         graph_mode_used = "flows"
         info = (
-            f"Flow kNN graph: {int(pyg_data.num_nodes)} nodes, "
+            f"Flow kNN graph: {int(pyg_data.num_nodes or 0)} nodes, "
             f"{len(feature_columns)} input features, k={config.knn_k}."
         )
 
@@ -177,14 +178,18 @@ def run_experiment(
     )
 
     if config.noise_level_features > 0:
-        noise = torch.randn_like(pyg_data.x) * config.noise_level_features
-        pyg_data.x = pyg_data.x + noise
-        
+        x = getattr(pyg_data, "x", None)
+        if x is not None:
+            # pyg_data.x can be None for some graph types; guard against that to satisfy type checkers
+            noise = torch.randn_like(x) * config.noise_level_features
+            pyg_data.x = x + noise
+
     if config.noise_level_edges > 0:
         from torch_geometric.utils import dropout_edge
         # PyG dropout_edge requires training=True to actually drop
-        edge_index, _ = dropout_edge(pyg_data.edge_index, p=config.noise_level_edges, training=True)
-        pyg_data.edge_index = edge_index
+        if pyg_data.edge_index is not None:
+            edge_index, _ = dropout_edge(pyg_data.edge_index, p=config.noise_level_edges, training=True)
+            pyg_data.edge_index = edge_index
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     model = build_model_for_data(pyg_data, train_cfg)
@@ -202,9 +207,36 @@ def run_experiment(
     test_idx = pyg_data.test_mask.nonzero(as_tuple=False).view(-1)[:20]
     rows = []
     rev = {v: k for k, v in label_mapping.items()}
-    for i in test_idx.tolist():
-        yi = int(pyg_data.y[i].item())
-        pi = int(preds[i].item())
+
+    if not isinstance(preds, torch.Tensor):
+        preds = torch.as_tensor(preds, device=device)
+    assert isinstance(preds, torch.Tensor)
+
+    if probs is None:
+        probs = torch.zeros(
+            (preds.size(0), max(label_mapping.values()) + 1), device=device
+        )
+    elif not isinstance(probs, torch.Tensor):
+        probs = torch.as_tensor(probs, device=device)
+    assert isinstance(probs, torch.Tensor)
+
+    y_data = getattr(pyg_data, "y", None)
+    if y_data is None:
+        raise ValueError("Graph data missing labels: pyg_data.y is None")
+    y_tensor = y_data if isinstance(y_data, torch.Tensor) else torch.as_tensor(y_data, device=device)
+    if y_tensor.dim() == 0:
+        y_tensor = y_tensor.unsqueeze(0)
+
+    for idx in test_idx:
+        i = int(idx.item()) if isinstance(idx, torch.Tensor) else int(idx)
+        yi = int(y_tensor[i].item())
+        pi_value = preds[i]
+        pi = int(pi_value.item()) if isinstance(pi_value, torch.Tensor) else int(pi_value)
+        confidence = (
+            float(probs[i, pi].item())
+            if probs.dim() == 2
+            else float(probs[i].item())
+        )
         rows.append(
             {
                 "node_index": i,
@@ -212,11 +244,13 @@ def run_experiment(
                 "true_label": rev.get(yi, str(yi)),
                 "pred_class_id": pi,
                 "pred_label": rev.get(pi, str(pi)),
-                "confidence": float(probs[i, pi].item()),
+                "confidence": confidence,
             }
         )
     sample_df = pd.DataFrame(rows)
 
+    # Safely get feature size when pyg_data.x may be missing or None
+    _x = getattr(pyg_data, "x", None)
     return ExperimentResult(
         test_accuracy=test_metrics["accuracy"],
         test_precision=test_metrics["precision"],
@@ -224,9 +258,9 @@ def run_experiment(
         test_f1=test_metrics["f1"],
         label_mapping=label_mapping,
         graph_mode_used=graph_mode_used,
-        num_nodes=int(pyg_data.num_nodes),
-        num_edges=int(pyg_data.edge_index.size(1)),
-        num_features=int(pyg_data.x.size(1)),
+        num_nodes=int(pyg_data.num_nodes or 0),
+        num_edges=int(pyg_data.edge_index.size(1) if pyg_data.edge_index is not None else 0),
+        num_features=int(_x.size(1) if _x is not None else 0),
         training_history=history,
         sample_predictions=sample_df,
         device=str(device),

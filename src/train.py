@@ -48,6 +48,12 @@ def train_model(
     model = model.to(device)
     data = data.to(device)
 
+    # Ensure required tensors are present to satisfy type checkers and runtime
+    assert isinstance(data.y, torch.Tensor), "data.y must be a torch.Tensor"
+    assert isinstance(data.train_mask, torch.Tensor), "data.train_mask must be a torch.Tensor"
+    assert isinstance(data.val_mask, torch.Tensor), "data.val_mask must be a torch.Tensor"
+    assert isinstance(data.test_mask, torch.Tensor), "data.test_mask must be a torch.Tensor"
+
     optimizer = optim.Adam(
         model.parameters(),
         lr=config.learning_rate,
@@ -96,6 +102,10 @@ def evaluate(
 
     model.eval()
     data = data.to(device)
+
+    assert isinstance(data.y, torch.Tensor), "data.y must be a torch.Tensor"
+    assert isinstance(data.test_mask, torch.Tensor), "data.test_mask must be a torch.Tensor"
+
     logits = model(data.x, data.edge_index)
     test_metrics = compute_metrics(logits, data.y, data.test_mask)
     probs = F.softmax(logits, dim=1)
@@ -111,6 +121,9 @@ def build_model_for_data(data: Data, config: TrainConfig) -> GCNClassifier:
     Avoids magic numbers in `main.py` and prevents shape mismatches when
     feature engineering changes.
     """
+
+    assert isinstance(data.x, torch.Tensor), "data.x must be a torch.Tensor"
+    assert isinstance(data.y, torch.Tensor), "data.y must be a torch.Tensor"
 
     in_channels = int(data.x.size(1))
     num_classes = int(data.y.max().item()) + 1
