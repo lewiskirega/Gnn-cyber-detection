@@ -1,0 +1,21 @@
+# MSc project: Robust GNN for coordinated attack detection
+#
+# PyTorch is required for src/model.py and src/train.py. If `pip install -r
+# requirements.txt` does not give you a working torch, install PyTorch first:
+#
+#   CPU (recommended default for coursework):
+#     pip install torch --index-url https://download.pytorch.org/whl/cpu
+#
+#   CUDA (match your driver / CUDA from):
+#     https://pytorch.org/get-started/locally/
+#
+# Then install remaining packages:
+#     pip install -r requirements.txt
+#
+torch>=2.0,<3
+numpy>=1.24
+pandas>=2.0
+networkx>=3.0
+scikit-learn>=1.3
+torch-geometric>=2.4
+streamlit>=1.28
