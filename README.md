@@ -69,24 +69,34 @@ The codebase is highly modular, ensuring strict separation between data processi
 
 ---
 
-## 🎓 Academic Objectives Status
+## ✨ Core Features & Capabilities
 
-All formal project objectives for this Master's Thesis have been successfully met.
+*   **Topological Threat Detection:** Utilizes PyTorch Geometric to build k-Nearest Neighbor (kNN) flow graphs, mapping the structural relationships of network traffic rather than analyzing flows in isolation.
+*   **Dual-Graph Modes:** Dynamically constructs interaction graphs based on raw IP routing data (Hosts Mode) or multi-dimensional feature similarity (Flows Mode).
+*   **Adversarial Robustness:** Built-in testing suite to simulate network degradation (Edge Dropout) and payload obfuscation (Feature Noise), proving the model's resilience in chaotic environments.
+*   **Interactive Web Dashboard:** Includes a fully featured Streamlit UI for dynamic parameter tuning, live training visualization, and baseline model comparison.
+*   **Baseline Benchmarking:** Automatically trains and compares standard Machine Learning models (Random Forest, Logistic Regression) against the GNN architecture.
 
-### ✅ Objective 1: Investigation of coordinated cyber attacks
-*   **Status: Completed.** A comprehensive Literature Review chapter was drafted, detailing the threat landscape of distributed cloud systems (DDoS, Botnets, Lateral Movement) and the limitations of traditional, isolated IDS frameworks.
+---
 
-### ✅ Objective 2: Analysis of Graph Neural Networks for cybersecurity
-*   **Status: Completed.** A Technical Analysis chapter was drafted, mapping the mechanics of GNN message-passing to cybersecurity use-cases, explicitly highlighting topological strengths against structural evasion weaknesses.
+## 📊 Experimental Results
 
-### ✅ Objective 3: Design of a graph-based detection framework
-*   **Status: Completed.** The framework was engineered with a dual-mode graph construction strategy (Topology-based and Feature-based kNN), supported by formal Mermaid architectural diagrams in the System Design chapter.
+Tested on the **CIC-IDS2017** dataset (specifically isolating coordinated DDoS flows against benign background traffic).
 
-### ✅ Objective 4: Implementation of a robust GNN-based prototype
-*   **Status: Completed.** The codebase is fully functional. Robustness testing (`test_robustness.py`) and pipeline noise injection parameters were added to formally test structural resilience.
+| Model Architecture | Accuracy | Precision | Recall | F1-Score |
+| :--- | :--- | :--- | :--- | :--- |
+| **Traditional Random Forest** | 99.97% | 0.9997 | 0.9997 | 0.9997 |
+| **Proposed GNN (Graph Conv)** | 99.51% | 0.9951 | 0.9951 | 0.9951 |
 
-### ✅ Objective 5: Evaluation of detection performance and robustness
-*   **Status: Completed.** Extended metrics (Precision, Recall, Macro F1) were integrated. The GNN was empirically evaluated against baselines and extreme noise conditions, proving >99.5% F1-score resilience even with 80% edge dropout. The Evaluation Chapter is drafted.
+### 🛡️ Adversarial Robustness
+While traditional flat models perform slightly better on pristine, unperturbed datasets, the Graph Neural Network exhibits **extreme structural resilience** against evasion tactics:
+*   **80% Edge Dropout:** Even when 80% of communication links are artificially dropped to simulate packet loss or evasive routing, the GNN maintains a **99.68% F1-Score**.
+*   **Severe Feature Noise:** When Gaussian noise (Scale: 2.0) is injected into the flow features to simulate payload obfuscation, the GNN maintains a **99.55% F1-Score**.
 
-### ✅ Objective 6: Development of a structured project plan
-*   **Status: Completed.** Project planning artifacts (Gantt charts, completion status reports) were generated and all technical and academic deliverables were fulfilled.
+---
+
+## 🤝 Contributing
+Contributions, issues, and feature requests are welcome! Feel free to check the issues page if you want to contribute. 
+
+## 📝 License
+This project is open-source and available under the [MIT License](LICENSE).
