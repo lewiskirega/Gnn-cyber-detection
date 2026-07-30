@@ -35,7 +35,7 @@ def train_model(
     data: Data,
     device: torch.device,
     config: TrainConfig,
-    epoch_callback: Optional[Callable[[int, float, float, float], None]] = None,
+    epoch_callback: Optional[Callable[[int, float, float, float, float], None]] = None,
 ) -> GCNClassifier:
     """
     Train the GCN with Adam and cross-entropy on labeled training nodes.
@@ -69,19 +69,24 @@ def train_model(
         loss.backward()
         optimizer.step()
 
-        if epoch == 1 or epoch % 10 == 0 or epoch == config.epochs:
-            model.eval()
-            with torch.no_grad():
-                logits_eval = model(data.x, data.edge_index)
-                train_acc = accuracy(logits_eval, data.y, data.train_mask)
-                val_acc = accuracy(logits_eval, data.y, data.val_mask)
-            loss_v = float(loss.item())
-            print(
-                f"Epoch {epoch:04d} | loss={loss_v:.4f} "
-                f"| train_acc={train_acc:.4f} | val_acc={val_acc:.4f}"
+        model.eval()
+        with torch.no_grad():
+            logits_eval = model(data.x, data.edge_index)
+            train_acc = accuracy(logits_eval, data.y, data.train_mask)
+            val_acc = accuracy(logits_eval, data.y, data.val_mask)
+            train_loss = float(loss.item())
+            val_loss = float(
+                criterion(logits_eval[data.val_mask], data.y[data.val_mask]).item()
+                if data.val_mask.any()
+                else train_loss
             )
-            if epoch_callback is not None:
-                epoch_callback(epoch, loss_v, train_acc, val_acc)
+
+        print(
+            f"Epoch {epoch:04d} | loss={train_loss:.4f} "
+            f"| val_loss={val_loss:.4f} | train_acc={train_acc:.4f} | val_acc={val_acc:.4f}"
+        )
+        if epoch_callback is not None:
+            epoch_callback(epoch, train_loss, val_loss, train_acc, val_acc)
 
     return model
 
@@ -144,7 +149,7 @@ def run_training_pipeline(
     data: Data,
     config: Optional[TrainConfig] = None,
     device: Optional[torch.device] = None,
-    epoch_callback: Optional[Callable[[int, float, float, float], None]] = None,
+    epoch_callback: Optional[Callable[[int, float, float, float, float], None]] = None,
 ) -> Tuple[GCNClassifier, dict[str, float], torch.Tensor, torch.Tensor]:
     """
     High-level API: train, then evaluate on the test mask.

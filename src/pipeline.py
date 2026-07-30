@@ -18,6 +18,7 @@ from torch_geometric.data import Data
 
 from src.data_loader import DataLoaderConfig, TrafficDataLoader
 from src.graph_builder import FlowKnnGraphBuilder, TrafficGraphBuilder
+from src.evaluation import generate_evaluation_artifacts
 from src.train import TrainConfig, build_model_for_data, evaluate, train_model
 from src.utils import set_seed
 
@@ -56,6 +57,7 @@ class ExperimentResult:
     num_features: int
     training_history: List[Dict[str, Any]] = field(default_factory=list)
     sample_predictions: pd.DataFrame = field(default_factory=pd.DataFrame)
+    evaluation_artifacts: Dict[str, Any] = field(default_factory=dict)
     device: str = "cpu"
     info_message: str = ""
 
@@ -92,7 +94,7 @@ def peek_has_host_ips(data_path: Path, src_name: str = "src_ip", dst_name: str =
 
 def run_experiment(
     config: ExperimentConfig,
-    epoch_callback: Optional[Callable[[int, float, float, float], None]] = None,
+    epoch_callback: Optional[Callable[[int, float, float, float, float], None]] = None,
 ) -> ExperimentResult:
     """
     Load data, build graph, train GCN, evaluate, and package results.
@@ -122,16 +124,18 @@ def run_experiment(
     positive_class = config.positive_class or ("attack" if use_hosts else "DDoS")
     history: List[Dict[str, Any]] = []
 
-    def _on_epoch(epoch: int, loss: float, train_acc: float, val_acc: float) -> None:
+    def _on_epoch(epoch: int, train_loss: float, val_loss: float, train_acc: float, val_acc: float) -> None:
         row = {
             "epoch": epoch,
-            "loss": loss,
+            "loss": train_loss,
+            "train_loss": train_loss,
+            "val_loss": val_loss,
             "train_acc": train_acc,
             "val_acc": val_acc,
         }
         history.append(row)
         if epoch_callback is not None:
-            epoch_callback(epoch, loss, train_acc, val_acc)
+            epoch_callback(epoch, train_loss, val_loss, train_acc, val_acc)
 
     if use_hosts:
         loader = TrafficDataLoader()
@@ -204,6 +208,7 @@ def run_experiment(
     
     info += f"\nModel weights saved to: {model_save_path.relative_to(project_root())}"
 
+    _x = getattr(pyg_data, "x", None)
     test_idx = pyg_data.test_mask.nonzero(as_tuple=False).view(-1)[:20]
     rows = []
     rev = {v: k for k, v in label_mapping.items()}
@@ -227,6 +232,19 @@ def run_experiment(
     if y_tensor.dim() == 0:
         y_tensor = y_tensor.unsqueeze(0)
 
+    test_mask = pyg_data.test_mask.bool()
+    evaluation_artifacts = generate_evaluation_artifacts(
+        y_true=y_tensor[test_mask],
+        preds=preds[test_mask],
+        probs=probs[test_mask] if probs.dim() == 2 else probs[test_mask],
+        label_mapping=label_mapping,
+        output_dir=out_dir,
+        num_nodes=int(pyg_data.num_nodes or 0),
+        num_edges=int(pyg_data.edge_index.size(1) if pyg_data.edge_index is not None else 0),
+        num_features=int(_x.size(1) if _x is not None else 0),
+        training_history=history,
+    )
+
     for idx in test_idx:
         i = int(idx.item()) if isinstance(idx, torch.Tensor) else int(idx)
         yi = int(y_tensor[i].item())
@@ -249,8 +267,6 @@ def run_experiment(
         )
     sample_df = pd.DataFrame(rows)
 
-    # Safely get feature size when pyg_data.x may be missing or None
-    _x = getattr(pyg_data, "x", None)
     return ExperimentResult(
         test_accuracy=test_metrics["accuracy"],
         test_precision=test_metrics["precision"],
@@ -263,6 +279,7 @@ def run_experiment(
         num_features=int(_x.size(1) if _x is not None else 0),
         training_history=history,
         sample_predictions=sample_df,
+        evaluation_artifacts=evaluation_artifacts,
         device=str(device),
         info_message=info,
     )

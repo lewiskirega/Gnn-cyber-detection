@@ -92,8 +92,10 @@ def main() -> None:
     progress = st.progress(0.0, text="Training…")
     status = st.empty()
 
-    def on_epoch(epoch: int, loss: float, train_acc: float, val_acc: float) -> None:
-        status.text(f"Epoch {epoch} — loss {loss:.4f} — val acc {val_acc:.4f}")
+    def on_epoch(epoch: int, train_loss: float, val_loss: float, train_acc: float, val_acc: float) -> None:
+        status.text(
+            f"Epoch {epoch} — train loss {train_loss:.4f} — val loss {val_loss:.4f} — val acc {val_acc:.4f}"
+        )
         progress.progress(min(1.0, epoch / max(1, exp.epochs)), text=f"Epoch {epoch}/{exp.epochs}")
 
     try:
@@ -130,14 +132,61 @@ def main() -> None:
     c3.metric("Input features", result.num_features)
     c4.metric("Classes", len(result.label_mapping))
 
+    if result.evaluation_artifacts:
+        metrics = result.evaluation_artifacts.get("metrics", {})
+        st.subheader("Evaluation summary")
+        st.metric("ROC-AUC", f"{metrics.get('roc_auc', 0.0):.4f}")
+        st.metric("Average Precision", f"{metrics.get('average_precision', 0.0):.4f}")
+
     st.subheader("Label mapping")
     st.json(result.label_mapping)
 
     if result.training_history:
         st.subheader("Training curves")
         hist = pd.DataFrame(result.training_history)
-        st.line_chart(hist.set_index("epoch")[["train_acc", "val_acc"]])
-        st.line_chart(hist.set_index("epoch")[["loss"]])
+        plot_df = hist.set_index("epoch")
+        st.line_chart(plot_df[["train_acc", "val_acc"]])
+        st.line_chart(plot_df[["train_loss", "val_loss"]])
+
+    if result.evaluation_artifacts:
+        st.subheader("Confusion Matrix")
+        st.image(result.evaluation_artifacts["confusion_matrix_path"], caption="Confusion Matrix")
+
+        st.subheader("ROC Curve")
+        st.image(result.evaluation_artifacts["roc_curve_path"], caption="ROC Curve")
+
+        st.subheader("Precision–Recall Curve")
+        st.image(result.evaluation_artifacts["precision_recall_curve_path"], caption="Precision–Recall Curve")
+
+        st.subheader("Training Accuracy Curve")
+        st.image(result.evaluation_artifacts["accuracy_curve_path"], caption="Training Accuracy Curve")
+
+        st.subheader("Training Loss Curve")
+        st.image(result.evaluation_artifacts["loss_curve_path"], caption="Training Loss Curve")
+
+        st.subheader("Classification Report")
+        st.text_area("Report", value=result.evaluation_artifacts.get("classification_report", ""), height=250)
+
+        st.subheader("Downloads")
+        download_paths = [
+            ("Confusion matrix", result.evaluation_artifacts["confusion_matrix_path"]),
+            ("ROC curve", result.evaluation_artifacts["roc_curve_path"]),
+            ("Precision-recall curve", result.evaluation_artifacts["precision_recall_curve_path"]),
+            ("Accuracy curve", result.evaluation_artifacts["accuracy_curve_path"]),
+            ("Loss curve", result.evaluation_artifacts["loss_curve_path"]),
+            ("Classification report", result.evaluation_artifacts["report_path"]),
+            ("Metrics JSON", result.evaluation_artifacts["metrics_path"]),
+        ]
+        for label, path_str in download_paths:
+            path = Path(path_str)
+            if path.exists():
+                with path.open("rb") as fh:
+                    st.download_button(
+                        label=f"Download {label}",
+                        data=fh.read(),
+                        file_name=path.name,
+                        mime="application/octet-stream",
+                    )
 
     st.subheader("Sample test predictions")
     st.dataframe(result.sample_predictions, use_container_width=True)
