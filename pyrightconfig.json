@@ -1,0 +1,19 @@
+{
+  "venvPath": "/home/crawler/Documents/Projects/Gnn-cyber-detection",
+  "venv": "gnn-env",
+  "extraPaths": [
+    "src",
+    "gnn-env/lib/python3.14/site-packages",
+    "gnn-env/lib64/python3.14/site-packages"
+  ],
+  "executionEnvironments": [
+    {
+      "root": ".",
+      "extraPaths": [
+        "src",
+        "gnn-env/lib/python3.14/site-packages",
+        "gnn-env/lib64/python3.14/site-packages"
+      ]
+    }
+  ]
+}

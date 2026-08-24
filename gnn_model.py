@@ -1,53 +1,32 @@
 """
-Graph Neural Network architectures for node-level cyber attack classification.
+Advanced GNN Architecture Module for Coordinated Cloud Attack Detection.
 
-Includes:
-1. GCNClassifier (baseline 2-layer Graph Convolutional Network).
-2. AdvancedGNNClassifier / GATv2Classifier / SAGEJKClassifier (optimized multi-head
-   dynamic attention with LayerNorm, skip connections, and Jumping Knowledge).
+Implements upgraded Graph Neural Networks:
+1. Multi-head `GATv2Conv` (Dynamic Attention Graph Attention Networks v2).
+2. Residual `GraphSAGE` with Jumping Knowledge (`JK="cat"`).
+3. Layer Normalization (`nn.LayerNorm`), residual skip connections, and tuned dropout (0.15–0.25)
+   to prevent oversmoothing while maximizing feature discrimination.
 """
 
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Union
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch_geometric.nn import GCNConv, GATv2Conv, SAGEConv, JumpingKnowledge
-
-
-class GCNClassifier(nn.Module):
-    """
-    Two-layer GCN baseline classifier mapping node features to class logits.
-    """
-
-    def __init__(
-        self,
-        in_channels: int,
-        hidden_channels: int,
-        num_classes: int,
-        dropout: float = 0.5,
-    ) -> None:
-        super().__init__()
-        self.conv1 = GCNConv(in_channels, hidden_channels)
-        self.conv2 = GCNConv(hidden_channels, num_classes)
-        self.dropout = dropout
-
-    def forward(
-        self,
-        x: torch.Tensor,
-        edge_index: torch.Tensor,
-        edge_weight: Optional[torch.Tensor] = None,
-    ) -> torch.Tensor:
-        h = self.conv1(x, edge_index, edge_weight=edge_weight)
-        h = F.relu(h)
-        h = F.dropout(h, p=self.dropout, training=self.training)
-        return self.conv2(h, edge_index, edge_weight=edge_weight)
+from torch_geometric.nn import GATv2Conv, SAGEConv, JumpingKnowledge
 
 
 class AdvancedGNNClassifier(nn.Module):
     """
     Optimized multi-head GATv2 / Residual JK-GraphSAGE Classifier for node-level attack detection.
+    
+    Architectural highlights:
+    - Multi-head GATv2Conv layer with dynamic attention.
+    - Jumping Knowledge (JK='cat') aggregating representations across multi-layer hops.
+    - Layer Normalization on each GNN block.
+    - Residual skip connections.
+    - Tuned dropout rate (0.15 - 0.25).
     """
 
     def __init__(
@@ -58,7 +37,7 @@ class AdvancedGNNClassifier(nn.Module):
         num_layers: int = 3,
         heads: int = 4,
         dropout: float = 0.20,
-        arch_type: str = "GATv2",
+        arch_type: str = "GATv2",  # 'GATv2' or 'GraphSAGE'
         use_jk: bool = True,
     ) -> None:
         super().__init__()
@@ -86,6 +65,7 @@ class AdvancedGNNClassifier(nn.Module):
 
         for i in range(num_layers):
             if arch_type == "GATv2":
+                # Multi-head GATv2 with dynamic attention
                 conv = GATv2Conv(
                     in_channels=current_dim,
                     out_channels=hidden_channels,
@@ -93,7 +73,7 @@ class AdvancedGNNClassifier(nn.Module):
                     concat=True,
                     dropout=dropout,
                     add_self_loops=True,
-                    edge_dim=1,
+                    edge_dim=1,  # Edge weights support
                 )
                 next_dim = hidden_channels * heads
             elif arch_type == "GraphSAGE":
@@ -114,12 +94,14 @@ class AdvancedGNNClassifier(nn.Module):
             current_dim = next_dim
 
         if use_jk:
+            # Jumping Knowledge concatenation across layers
             self.jk = JumpingKnowledge(mode="cat")
             jk_dim = hidden_channels * num_layers if arch_type == "GraphSAGE" else (hidden_channels * heads) * num_layers
         else:
             self.jk = None
             jk_dim = current_dim
 
+        # Final prediction head with LayerNorm & tuned dropout
         self.classifier = nn.Sequential(
             nn.Linear(jk_dim, hidden_channels * 2),
             nn.LayerNorm(hidden_channels * 2),
@@ -134,6 +116,9 @@ class AdvancedGNNClassifier(nn.Module):
         edge_index: torch.Tensor,
         edge_weight: Optional[torch.Tensor] = None,
     ) -> torch.Tensor:
+        """
+        Compute node classification logits.
+        """
         h = self.input_proj(x)
         layer_representations: List[torch.Tensor] = []
 
@@ -149,6 +134,7 @@ class AdvancedGNNClassifier(nn.Module):
             else:
                 h_conv = conv(h, edge_index)
 
+            # Residual skip connection + LayerNorm + Activation + Dropout
             h = norm(h_conv + h_res)
             h = F.leaky_relu(h, negative_slope=0.2)
             h = F.dropout(h, p=self.dropout, training=self.training)
@@ -164,7 +150,7 @@ class AdvancedGNNClassifier(nn.Module):
 
 
 class GATv2Classifier(AdvancedGNNClassifier):
-    """Multi-head GATv2 Classifier."""
+    """Convenience subclass for dynamic multi-head GATv2 Conv model."""
 
     def __init__(
         self,
@@ -187,7 +173,7 @@ class GATv2Classifier(AdvancedGNNClassifier):
 
 
 class SAGEJKClassifier(AdvancedGNNClassifier):
-    """Residual GraphSAGE Classifier with Jumping Knowledge."""
+    """Convenience subclass for Residual GraphSAGE with Jumping Knowledge model."""
 
     def __init__(
         self,
@@ -207,3 +193,17 @@ class SAGEJKClassifier(AdvancedGNNClassifier):
             use_jk=True,
         )
 
+
+if __name__ == "__main__":
+    print("Testing Advanced GNN Architectures...")
+    x = torch.randn(100, 21)
+    edge_index = torch.randint(0, 100, (2, 400))
+    edge_weight = torch.rand(400)
+
+    gat_model = GATv2Classifier(in_channels=21, hidden_channels=32, num_classes=2)
+    gat_logits = gat_model(x, edge_index, edge_weight)
+    print(f"GATv2Classifier output shape: {gat_logits.shape}")
+
+    sage_model = SAGEJKClassifier(in_channels=21, hidden_channels=32, num_classes=2)
+    sage_logits = sage_model(x, edge_index, edge_weight)
+    print(f"SAGEJKClassifier output shape: {sage_logits.shape}")

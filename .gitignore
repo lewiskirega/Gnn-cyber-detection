@@ -10,18 +10,20 @@ __pycache__/
 *$py.class
 .pytest_cache/
 
-# Data and Model Outputs (Do NOT push massive CSVs or model weights to GitHub!)
-data/
-outputs/
-*.csv
-*.pcap
-*.pth
-*.pt
+# Streamlit agent skills (environment-specific symlinks)
+.agents/skills/developing-with-streamlit
+.claude/skills/developing-with-streamlit
 
-# OS Generated Files
+# Data and Model Outputs
+data/*.csv
+data/*.pcap
+outputs/*.pth
+outputs/*.pt
+outputs/*.png
+outputs/*.json
+
+# OS & IDE Generated Files
 .DS_Store
 Thumbs.db
-
-# IDEs
 .vscode/
 .idea/
