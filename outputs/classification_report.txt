@@ -1,0 +1,8 @@
+              precision    recall  f1-score   support
+
+      BENIGN     0.9984    0.9904    0.9944      1875
+        DDoS     0.9905    0.9984    0.9944      1875
+
+    accuracy                         0.9944      3750
+   macro avg     0.9944    0.9944    0.9944      3750
+weighted avg     0.9944    0.9944    0.9944      3750
